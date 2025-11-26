@@ -352,20 +352,20 @@ class RVVDecoder:
             'opcode': instruction & self.OPCODE_MASK,
             'funct3': (instruction & self.FUNCT3_MASK) >> 12,
             'funct6': (instruction & self.FUNCT6_MASK) >> 26,
-            'rd': (instruction & self.RD_MASK) >> 7,
-            'rs1': (instruction & self.RS1_MASK) >> 15,
-            'rs2': (instruction & self.RS2_MASK) >> 20,
-            'vs2': (instruction & self.VS2_MASK) >> 20,
-            'vs1': (instruction & self.VS1_MASK) >> 15,
-            'vd': (instruction & self.VD_MASK) >> 7,
-            'vm': (instruction & self.VM_MASK) >> 25,
-            'width': (instruction & self.WIDTH_MASK) >> 12,
-            'mop': (instruction & self.MOP_MASK) >> 27,
-            'nf': (instruction & self.NF_MASK) >> 29,
-            'imm': (instruction & self.IMM_MASK) >> 15,
-            'lumop': (instruction & self.LUMOP_MASK) >> 20,
-            'zimm': (instruction & self.ZIMM_MASK) >> 20,
-            'raw': instruction
+            'rd'    : (instruction & self.RD_MASK) >> 7,
+            'rs1'   : (instruction & self.RS1_MASK) >> 15,
+            'rs2'   : (instruction & self.RS2_MASK) >> 20,
+            'vs2'   : (instruction & self.VS2_MASK) >> 20,
+            'vs1'   : (instruction & self.VS1_MASK) >> 15,
+            'vd'    : (instruction & self.VD_MASK) >> 7,
+            'vm'    : (instruction & self.VM_MASK) >> 25,
+            'width' : (instruction & self.WIDTH_MASK) >> 12,
+            'mop'   : (instruction & self.MOP_MASK) >> 27,
+            'nf'    : (instruction & self.NF_MASK) >> 29,
+            'imm'   : (instruction & self.IMM_MASK) >> 15,
+            'lumop' : (instruction & self.LUMOP_MASK) >> 20,
+            'zimm'  : (instruction & self.ZIMM_MASK) >> 20,
+            'raw'   : instruction
         }
         
         if self.debug:
@@ -395,35 +395,36 @@ class RVVDecoder:
                 parts.append(self.vlmul_map[vlmul])
             parts.append("ta" if vta else "tu")
             parts.append("ma" if vma else "mu")
-            
         return ", ".join(parts)
 
     def decode_config_instruction(self, fields):
         """Decode vector configuration instructions"""
         if fields['funct3'] != self.OPCFG:
             return None
-            
-        rd = fields['rd']
-        rs1 = fields['rs1']
+        rd   = fields['rd']
+        rs1  = fields['rs1']
+        rs2  = fields['rs2']
         zimm = fields['zimm']
         
-        if (zimm & 0x800) == 0:
+        if self.debug:
+            self.debug_print(f"{fields['raw'] >> 31}")
+            
+        if (fields['raw'] >> 31) == 0b0:
             vtype_str = self.decode_vtype(zimm)
             return f"vsetvli x{rd}, x{rs1}, {vtype_str}"
-        elif (zimm & 0x400) == 0:
-            uimm = rs1
+        elif (fields['raw'] >> 30) == 0b11:
             vtype_str = self.decode_vtype(zimm & 0x3FF)
-            return f"vsetivli x{rd}, {uimm}, {vtype_str}"
-        else:
-            return f"vsetvl x{rd}, x{rs1}, x{fields['rs2']}"
+            return f"vsetivli x{rd}, {rs1}, {vtype_str}"
+        elif (fields['raw'] >> 25) == 0b1000000:
+            return f"vsetvl x{rd}, x{rs1}, x{rs2}"
 
     def decode_vector_load(self, fields):
         """Decode vector load instructions"""
         width_str = self.width_map.get(fields['width'], f"e{fields['width']}")
-        mop = fields['mop']
-        vm_str = "" if fields['vm'] else ", v0.t"
-        nf = fields['nf']
-        nf_str = f"{nf+1}" if nf > 0 else ""
+        mop       = fields['mop']
+        vm_str    = "" if fields['vm'] else ", v0.t"
+        nf        = fields['nf']
+        nf_str    = f"{nf+1}" if nf > 0 else ""
         
         if mop == 0b00 and fields['lumop'] == 0b01000:
             return f"vl{nf}r{width_str}.v v{fields['vd']}, (x{fields['rs1']})"
@@ -464,10 +465,10 @@ class RVVDecoder:
     def decode_vector_store(self, fields):
         """Decode vector store instructions"""
         width_str = self.width_map.get(fields['width'], f"e{fields['width']}")
-        mop = fields['mop']
-        vm_str = "" if fields['vm'] else ", v0.t"
-        nf = fields['nf']
-        nf_str = f"{nf+1}" if nf > 0 else ""
+        mop       = fields['mop']
+        vm_str    = "" if fields['vm'] else ", v0.t"
+        nf        = fields['nf']
+        nf_str    = f"{nf+1}" if nf > 0 else ""
         
         if mop == 0b00 and fields['lumop'] == 0b01000:
             return f"vs{nf}r.v v{fields['vd']}, (x{fields['rs1']})"
@@ -528,15 +529,15 @@ class RVVDecoder:
 
     def _decode_special_cases(self, fields, funct3, funct6, vm_str):
         """Handle special case instructions"""
-        if funct6 == 0b010000:  # Special unary group 0
+        if funct6 == 0b010000:  
             return self._decode_special_unary_0(fields, funct3, vm_str)
-        elif funct6 == 0b010010:  # Special unary group 1  
+        elif funct6 == 0b010010: 
             return self._decode_special_unary_1(fields, funct3, vm_str)
-        elif funct6 == 0b010011:  # Special unary group 2
+        elif funct6 == 0b010011:  
             return self._decode_special_unary_2(fields, funct3, vm_str)
-        elif funct6 == 0b010100:  # Mask unary
+        elif funct6 == 0b010100:  
             return self._decode_mask_unary(fields, funct3, vm_str)
-        elif funct6 == 0b100111 and funct3 == self.OPIVI:  # vmv<nr>r
+        elif funct6 == 0b100111 and funct3 == self.OPIVI:  
             return self._decode_vmv_nr_r(fields)
         
         return None
@@ -720,7 +721,6 @@ class RVVDecoder:
             
             self.debug_print("=== STARTING DECODING ===")
             fields = self.extract_fields(instruction)
-            
             if fields['opcode'] == self.LOAD_FP:
                 result = self.decode_vector_load(fields)
             elif fields['opcode'] == self.STORE_FP:
