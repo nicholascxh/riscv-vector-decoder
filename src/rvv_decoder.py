@@ -544,37 +544,44 @@ class RVVDecoder:
 
     def _decode_special_unary_0(self, fields, funct3, vm_str):
         """Decode special unary operations group 0"""
-        if funct3 == self.OPMVX and fields['vs2'] == 0b00000:
-            return f"vmv.s.x v{fields['vd']}, x{fields['rs1']}"
+        if funct3 == self.OPMVX:
+            if fields['vs2'] in self.vrxunary0_map:
+                return f"{self.vrxunary0_map[fields['vs2']]} v{fields['vd']}, x{fields['rs1']}"
         elif funct3 == self.OPMVV:
             if fields['rs1'] in self.vwxunary0_map:
                 return f"{self.vwxunary0_map[fields['rs1']]} x{fields['rd']}, v{fields['vs2']}{vm_str}"
-        elif funct3 == self.OPFVF and fields['vs2'] == 0b00000:
-            return f"vfmv.s.f v{fields['vd']}, f{fields['rs1']}"
-        elif funct3 == self.OPFVV and fields['rs1'] == 0b00000:
-            return f"vfmv.f.s f{fields['rd']}, v{fields['vs2']}"
+        elif funct3 == self.OPFVF:
+            if fields['vs2'] in self.vrfunary0_map:
+                return f"{self.vrfunary0_map[fields['vs2']]} v{fields['vd']}, f{fields['rs1']}"
+        elif funct3 == self.OPFVV:
+            if fields['rs1'] in self.vwfunary0_map:
+                return f"{self.vwfunary0_map[fields['rs1']]} f{fields['rd']}, v{fields['vs2']}"
         return None
 
     def _decode_special_unary_1(self, fields, funct3, vm_str):
         """Decode special unary operations group 1"""
-        if funct3 == self.OPMVV and fields['rs1'] in self.vxunary0_map:
-            return f"{self.vxunary0_map[fields['rs1']]} v{fields['vd']}, v{fields['vs2']}{vm_str}"
-        elif funct3 == self.OPFVV and fields['rs1'] in self.vfunary0_map:
-            return f"{self.vfunary0_map[fields['rs1']]} v{fields['vd']}, v{fields['vs2']}{vm_str}"
+        if funct3 == self.OPMVV:
+            if fields['rs1'] in self.vxunary0_map:
+                return f"{self.vxunary0_map[fields['rs1']]} v{fields['vd']}, v{fields['vs2']}{vm_str}"
+        elif funct3 == self.OPFVV:
+            if fields['rs1'] in self.vfunary0_map:
+                return f"{self.vfunary0_map[fields['rs1']]} v{fields['vd']}, v{fields['vs2']}{vm_str}"
         return None
 
     def _decode_special_unary_2(self, fields, funct3, vm_str):
         """Decode special unary operations group 2"""
-        if funct3 == self.OPFVV and fields['rs1'] in self.vfunary1_map:
-            return f"{self.vfunary1_map[fields['rs1']]} v{fields['vd']}, v{fields['vs2']}{vm_str}"
+        if funct3 == self.OPFVV:
+            if fields['rs1'] in self.vfunary1_map:
+                return f"{self.vfunary1_map[fields['rs1']]} v{fields['vd']}, v{fields['vs2']}{vm_str}"
         return None
 
     def _decode_mask_unary(self, fields, funct3, vm_str):
         """Decode mask unary operations"""
-        if funct3 == self.OPMVV and fields['rs1'] in self.vmunary0_map:
-            mnemonic = self.vmunary0_map[fields['rs1']]
-            suffix = ".m" if fields['rs1'] in [0b00001, 0b00010, 0b00011, 0b10000] else ".v"
-            return f"{mnemonic}{suffix} v{fields['vd']}, v{fields['vs2']}{vm_str}"
+        if funct3 == self.OPMVV:
+            if fields['rs1'] in self.vmunary0_map:
+                mnemonic = self.vmunary0_map[fields['rs1']]
+                suffix = ".m" if fields['rs1'] in [0b00001, 0b00010, 0b00011, 0b10000] else ".v"
+                return f"{mnemonic}{suffix} v{fields['vd']}, v{fields['vs2']}{vm_str}"
         return None
 
     def _decode_vmv_nr_r(self, fields):
@@ -653,7 +660,7 @@ class RVVDecoder:
         
         if funct3 == self.OPMVV:
             if mnemonic.startswith("vw") and mnemonic.endswith(".w"):
-                base_mnemonic = mnemonic[:-2]
+                mnemonic = mnemonic[:-2]
                 suffix = ".wv"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
             elif mnemonic in ["vmandn", "vmand", "vmor", "vmxor", "vmorn", "vmnand", "vmnor", "vmxnor"]:
@@ -667,7 +674,7 @@ class RVVDecoder:
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
         else: 
             if mnemonic.startswith("vw") and mnemonic.endswith(".w"):
-                base_mnemonic = mnemonic[:-2]
+                mnemonic = mnemonic[:-2]
                 suffix = ".wx"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, x{fields['rs1']}"
             else:
@@ -687,7 +694,7 @@ class RVVDecoder:
             
         if funct3 == self.OPFVV:
             if mnemonic.startswith("vfw") and mnemonic.endswith(".w"):
-                base_mnemonic = mnemonic[:-2]
+                mnemonic = mnemonic[:-2]
                 suffix = ".wv"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
             elif mnemonic.startswith("vfred") or mnemonic.startswith("vfwred"):
@@ -698,7 +705,7 @@ class RVVDecoder:
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
         else: 
             if mnemonic.startswith("vfw") and mnemonic.endswith(".w"):
-                base_mnemonic = mnemonic[:-2]
+                mnemonic = mnemonic[:-2]
                 suffix = ".wf"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, f{fields['rs1']}"
             else:
