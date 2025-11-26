@@ -23,7 +23,7 @@ class RVVDecoder:
         self.NF_MASK = 0xE0000000
         self.IMM_MASK = 0xF8000
         self.LUMOP_MASK = 0x1F00000
-        self.ZIMM_MASK = 0xFFF00000
+        self.ZIMM_MASK = 0x7FF00000
         
         # Opcodes
         self.OP_V = 0x57
@@ -42,21 +42,50 @@ class RVVDecoder:
         
         # Configuration maps
         self.width_map = {
-            0b000: "8", 0b001: "16", 0b010: "32", 0b011: "64",
-            0b100: "128", 0b101: "256", 0b110: "512", 0b111: "1024"
+            0b000: "8", 
+            0b001: "16", 
+            0b010: "32", 
+            0b011: "64",
+            0b100: "128", 
+            0b101: "256", 
+            0b110: "512", 
+            0b111: "1024"
         }
         
         self.vsew_map = {
-            0b000: "e8", 0b001: "e16", 0b010: "e32", 0b011: "e64"
+            0b000: "e8", 
+            0b001: "e16", 
+            0b010: "e32", 
+            0b011: "e64"
         }
         
         self.vlmul_map = {
-            0b000: "m1", 0b001: "m2", 0b010: "m4", 0b011: "m8",
-            0b101: "mf8", 0b110: "mf4", 0b111: "mf2"
+            0b000: "m1", 
+            0b001: "m2", 
+            0b010: "m4", 
+            0b011: "m8",
+            0b101: "mf8", 
+            0b110: "mf4", 
+            0b111: "mf2"
         }
         
-        self.whole_reg_moves = {0b00000: 0, 0b00001: 1, 0b00011: 2, 0b00111: 3}
-        self.nfield_map = {0b000: 1, 0b001: 2, 0b010: 3, 0b011: 4, 0b100: 5, 0b101: 6, 0b110: 7, 0b111: 8}
+        self.whole_reg_moves = {
+            0b00000: 0, 
+            0b00001: 1, 
+            0b00011: 2, 
+            0b00111: 3
+        }
+        
+        self.nfield_map = {
+            0b000: 1, 
+            0b001: 2, 
+            0b010: 3, 
+            0b011: 4, 
+            0b100: 5, 
+            0b101: 6, 
+            0b110: 7, 
+            0b111: 8
+        }
         
         self.setup_instruction_tables()
 
@@ -351,10 +380,10 @@ class RVVDecoder:
     def decode_vtype(self, zimm):
         """Decode vtype configuration from zimm field"""
         vlmul = zimm & 0b111
-        vsew = (zimm >> 3) & 0b111
-        vta = (zimm >> 6) & 1
-        vma = (zimm >> 7) & 1
-        vill = (zimm >> 8) & 1
+        vsew  = (zimm >> 3) & 0b111
+        vta   = (zimm >> 6) & 1
+        vma   = (zimm >> 7) & 1
+        vill  = (zimm >> 8) & 1
         
         parts = []
         if vill:
@@ -388,62 +417,87 @@ class RVVDecoder:
         else:
             return f"vsetvl x{rd}, x{rs1}, x{fields['rs2']}"
 
-    def decode_vector_load_store(self, fields, is_load=True):
-        """Decode vector load/store instructions"""
+    def decode_vector_load(self, fields):
+        """Decode vector load instructions"""
         width_str = self.width_map.get(fields['width'], f"e{fields['width']}")
         mop = fields['mop']
         vm_str = "" if fields['vm'] else ", v0.t"
         nf = fields['nf']
         nf_str = f"{nf+1}" if nf > 0 else ""
         
-        # Handle whole register moves
-        if mop == 0b00 and nf == 0 and fields['width'] == 0b111:
-            if fields['lumop'] in self.whole_reg_moves:
-                reg_count = 2 ** self.whole_reg_moves[fields['lumop']]
-                if is_load:
-                    return f"vl{reg_count}re{width_str}.v v{fields['vd']}, (x{fields['rs1']})"
-                else:
-                    return f"vs{reg_count}r.v v{fields['vd']}, (x{fields['rs1']})"
-        
-        # Handle fault-only-first loads
-        if mop == 0b00 and fields['lumop'] == 0b10000 and is_load:
+        if mop == 0b00 and fields['lumop'] == 0b01000:
+            return f"vl{nf}r{width_str}.v v{fields['vd']}, (x{fields['rs1']})"
+                
+        if mop == 0b00 and fields['lumop'] == 0b10000:
             if nf > 0:
                 return f"vlseg{nf_str}e{width_str}ff.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
             else:
                 return f"vle{width_str}ff.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
         
-        # Handle mask load/store
-        if mop == 0b00 and fields['lumop'] == 0b00001:
-            if is_load:
-                return f"vlm.v v{fields['vd']}, (x{fields['rs1']})"
-            else:
-                return f"vsm.v v{fields['vd']}, (x{fields['rs1']})"
+        if mop == 0b00 and fields['lumop'] == 0b01011:
+            return f"vlm.v v{fields['vd']}, (x{fields['rs1']})"
         
-        # Main load/store decoding
-        if mop == 0b00:  # Unit-stride
+        # Main load decoding
+        if mop == 0b00 and fields['lumop'] == 0b00000:  
             if nf > 0:
-                return f"vl{'seg' if is_load else 'sseg'}{nf_str}e{width_str}.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
+                return f"vlseg{nf_str}e{width_str}.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
             else:
-                return f"vl{'e' if is_load else 'se'}{width_str}.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
-        elif mop == 0b10:  # Strided
+                return f"vle{width_str}.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
+        elif mop == 0b10:  
             if nf > 0:
-                return f"vl{'sseg' if is_load else 'ssseg'}{nf_str}e{width_str}.v v{fields['vd']}, (x{fields['rs1']}), x{fields['rs2']}{vm_str}"
+                return f"vlsseg{nf_str}e{width_str}.v v{fields['vd']}, (x{fields['rs1']}), x{fields['rs2']}{vm_str}"
             else:
-                return f"vl{'se' if is_load else 'sse'}{width_str}.v v{fields['vd']}, (x{fields['rs1']}), x{fields['rs2']}{vm_str}"
-        elif mop == 0b01:  # Indexed-unordered
-            suffix = "ux" if is_load else "sux"
+                return f"vlse{width_str}.v v{fields['vd']}, (x{fields['rs1']}), x{fields['rs2']}{vm_str}"
+        elif mop == 0b01: 
             if nf > 0:
-                return f"vl{suffix}seg{nf_str}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+                return f"vluxseg{nf_str}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
             else:
-                return f"vl{suffix}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
-        elif mop == 0b11:  # Indexed-ordered
-            suffix = "ox" if is_load else "sox"
+                return f"vluxei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+        elif mop == 0b11:  
             if nf > 0:
-                return f"vl{suffix}seg{nf_str}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+                return f"vloxseg{nf_str}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
             else:
-                return f"vl{suffix}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+                return f"vloxei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
         
-        return f"Unknown vector {'load' if is_load else 'store'}"
+        return f"Unknown vector load instruction"
+        
+    def decode_vector_store(self, fields):
+        """Decode vector store instructions"""
+        width_str = self.width_map.get(fields['width'], f"e{fields['width']}")
+        mop = fields['mop']
+        vm_str = "" if fields['vm'] else ", v0.t"
+        nf = fields['nf']
+        nf_str = f"{nf+1}" if nf > 0 else ""
+        
+        if mop == 0b00 and fields['lumop'] == 0b01000:
+            return f"vs{nf}r.v v{fields['vd']}, (x{fields['rs1']})"
+       
+        if mop == 0b00 and fields['lumop'] == 0b01011:
+            return f"vsm.v v{fields['vd']}, (x{fields['rs1']})"
+        
+        # Main store decoding
+        if mop == 0b00 and fields['lumop'] == 0b00000: 
+            if nf > 0:
+                return f"vsseg{nf_str}e{width_str}.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
+            else:
+                return f"vse{width_str}.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
+        elif mop == 0b10:
+            if nf > 0:
+                return f"vssseg{nf_str}e{width_str}.v v{fields['vd']}, (x{fields['rs1']}), x{fields['rs2']}{vm_str}"
+            else:
+                return f"vsse{width_str}.v v{fields['vd']}, (x{fields['rs1']}), x{fields['rs2']}{vm_str}"
+        elif mop == 0b01:
+            if nf > 0:
+                return f"vsuxseg{nf_str}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+            else:
+                return f"vsuxei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+        elif mop == 0b11:
+            if nf > 0:
+                return f"vsoxseg{nf_str}ei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+            else:
+                return f"vsoxei{width_str}.v v{fields['vd']}, (x{fields['rs1']}), v{fields['vs2']}{vm_str}"
+        
+        return f"Unknown vector store instruction"
 
     def decode_vector_arithmetic(self, fields):
         """Decode vector arithmetic instructions using logical funct3-based approach"""
@@ -565,24 +619,23 @@ class RVVDecoder:
 
     def _decode_opi_instruction(self, fields, funct3, funct6, vm_str):
         """Decode OPI instructions (Integer)"""
-        if funct6 == 0b010111:  # vmerge/vmv
+        if funct6 == 0b010111:  
             return self._decode_vmerge_vmv(fields, funct3, vm_str)
         
         mnemonic = self.opi_instructions.get(funct6)
         if not mnemonic:
             return None
             
-        # Determine suffix based on funct3
         if funct3 == self.OPIVV:
             suffix = ".vv"
             operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
         elif funct3 == self.OPIVX:
             suffix = ".vx"  
             operands = f"v{fields['vd']}, v{fields['vs2']}, x{fields['rs1']}"
-        else:  # OPIVI
+        else:  
             suffix = ".vi"
             imm = fields['imm']
-            if imm & 0x10:  # sign extend 5-bit immediate
+            if imm & 0x10:  
                 imm = imm - 0x20
             operands = f"v{fields['vd']}, v{fields['vs2']}, {imm}"
         
@@ -594,14 +647,11 @@ class RVVDecoder:
         if not mnemonic:
             return None
             
-        # Handle special OPM instructions
         if mnemonic == "vcompress":
             return f"vcompress.vm v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
         
-        # Determine suffix and operands
         if funct3 == self.OPMVV:
             if mnemonic.startswith("vw") and mnemonic.endswith(".w"):
-                # Widening instructions with .w suffix
                 base_mnemonic = mnemonic[:-2]
                 suffix = ".wv"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
@@ -614,7 +664,7 @@ class RVVDecoder:
             else:
                 suffix = ".vv"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
-        else:  # OPMVX
+        else: 
             if mnemonic.startswith("vw") and mnemonic.endswith(".w"):
                 base_mnemonic = mnemonic[:-2]
                 suffix = ".wx"
@@ -627,14 +677,13 @@ class RVVDecoder:
 
     def _decode_opf_instruction(self, fields, funct3, funct6, vm_str):
         """Decode OPF instructions (Floating-Point)"""
-        if funct6 == 0b010111:  # vfmerge/vfmv
+        if funct6 == 0b010111:
             return self._decode_vfmerge_vfmv(fields, funct3, vm_str)
             
         mnemonic = self.opf_instructions.get(funct6)
         if not mnemonic:
             return None
             
-        # Determine suffix and operands
         if funct3 == self.OPFVV:
             if mnemonic.startswith("vfw") and mnemonic.endswith(".w"):
                 base_mnemonic = mnemonic[:-2]
@@ -646,7 +695,7 @@ class RVVDecoder:
             else:
                 suffix = ".vv"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
-        else:  # OPFVF
+        else: 
             if mnemonic.startswith("vfw") and mnemonic.endswith(".w"):
                 base_mnemonic = mnemonic[:-2]
                 suffix = ".wf"
@@ -673,9 +722,9 @@ class RVVDecoder:
             fields = self.extract_fields(instruction)
             
             if fields['opcode'] == self.LOAD_FP:
-                result = self.decode_vector_load_store(fields, is_load=True)
+                result = self.decode_vector_load(fields)
             elif fields['opcode'] == self.STORE_FP:
-                result = self.decode_vector_load_store(fields, is_load=False)
+                result = self.decode_vector_store(fields)
             elif fields['opcode'] == self.OP_V:
                 result = self.decode_vector_arithmetic(fields)
                 if not result:
