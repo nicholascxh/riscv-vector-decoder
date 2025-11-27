@@ -216,6 +216,9 @@ class RVVDecoder:
             0b111101: "vwmacc",
             0b111110: "vwmaccus",
             0b111111: "vwmaccsu",
+            # Slide
+            0b001110: "vslide1up",
+            0b001111: "vslide1down"
         }
 
         # === OPF Instructions (Floating-Point) ===
@@ -585,7 +588,8 @@ class RVVDecoder:
             if fields['rs1'] in self.vmunary0_map:
                 mnemonic = self.vmunary0_map[fields['rs1']]
                 suffix = ".m" if fields['rs1'] in [0b00001, 0b00010, 0b00011, 0b10000] else ".v"
-                return f"{mnemonic}{suffix} v{fields['vd']}, v{fields['vs2']}{vm_str}"
+                vs2 = f", v{fields['vs2']}" if fields['rs1'] not in [0b10001] else ""
+                return f"{mnemonic}{suffix} v{fields['vd']}{vs2}{vm_str}"
         return None
 
     def _decode_vmv_nr_r(self, fields):
