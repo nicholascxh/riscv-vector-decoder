@@ -19,10 +19,11 @@ class RVVDecoder:
         self.VD_MASK = 0xF80
         self.VM_MASK = 0x2000000
         self.WIDTH_MASK = 0x7000
-        self.MOP_MASK = 0x18000000
+        self.MOP_MASK = 0x0C000000
         self.NF_MASK = 0xE0000000
         self.IMM_MASK = 0xF8000
         self.LUMOP_MASK = 0x1F00000
+        self.SUMOP_MASK = 0x1F00000
         self.ZIMM_MASK = 0x7FF00000
         
         # Opcodes
@@ -43,13 +44,13 @@ class RVVDecoder:
         # Configuration maps
         self.width_map = {
             0b000: "8", 
-            0b001: "16", 
-            0b010: "32", 
-            0b011: "64",
-            0b100: "128", 
-            0b101: "256", 
-            0b110: "512", 
-            0b111: "1024"
+            0b101: "16", 
+            0b110: "32", 
+            0b111: "64",
+            0b001: "FP16", 
+            0b010: "FP32", 
+            0b011: "FP64", 
+            0b100: "FP128"
         }
         
         self.vsew_map = {
@@ -366,10 +367,11 @@ class RVVDecoder:
             'vd'    : (instruction & self.VD_MASK) >> 7,
             'vm'    : (instruction & self.VM_MASK) >> 25,
             'width' : (instruction & self.WIDTH_MASK) >> 12,
-            'mop'   : (instruction & self.MOP_MASK) >> 27,
+            'mop'   : (instruction & self.MOP_MASK) >> 26,
             'nf'    : (instruction & self.NF_MASK) >> 29,
             'imm'   : (instruction & self.IMM_MASK) >> 15,
             'lumop' : (instruction & self.LUMOP_MASK) >> 20,
+            'sumop' : (instruction & self.SUMOP_MASK) >> 20,
             'zimm'  : (instruction & self.ZIMM_MASK) >> 20,
             'raw'   : instruction
         }
@@ -432,6 +434,10 @@ class RVVDecoder:
         nf        = fields['nf']
         nf_str    = f"{nf+1}" if nf > 0 else ""
         
+        self.debug_print(f"[DEBUG] mop: {mop:02b}")
+        self.debug_print( f"[DEBUG] nf: {nf:01b}")
+        self.debug_print(f"[DEBUG] width: {fields['width']:03b}")
+        
         if mop == 0b00 and fields['lumop'] == 0b01000:
             return f"vl{nf}r{width_str}.v v{fields['vd']}, (x{fields['rs1']})"
                 
@@ -476,14 +482,18 @@ class RVVDecoder:
         nf        = fields['nf']
         nf_str    = f"{nf+1}" if nf > 0 else ""
         
-        if mop == 0b00 and fields['lumop'] == 0b01000:
+        self.debug_print(f"[DEBUG] mop: {mop:02b}")
+        self.debug_print( f"[DEBUG] nf: {nf:01b}")
+        self.debug_print(f"[DEBUG] width: {fields['width']:03b}")
+        
+        if mop == 0b00 and fields['sumop'] == 0b01000:
             return f"vs{nf}r.v v{fields['vd']}, (x{fields['rs1']})"
        
-        if mop == 0b00 and fields['lumop'] == 0b01011:
+        if mop == 0b00 and fields['sumop'] == 0b01011:
             return f"vsm.v v{fields['vd']}, (x{fields['rs1']})"
         
         # Main store decoding
-        if mop == 0b00 and fields['lumop'] == 0b00000: 
+        if mop == 0b00 and fields['sumop'] == 0b00000: 
             if nf > 0:
                 return f"vsseg{nf_str}e{width_str}.v v{fields['vd']}, (x{fields['rs1']}){vm_str}"
             else:
@@ -674,21 +684,27 @@ class RVVDecoder:
             return f"vcompress.vm v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
         
         if funct3 == self.OPMVV:
-            if mnemonic.startswith("vw") and mnemonic.endswith(".w"):
-                mnemonic = mnemonic[:-2]
-                suffix = ".wv"
-                operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
+            if mnemonic in ["vmacc", "vnmsac", "vmadd", "vnmsub", "vwmaccu", "vwmacc", "vwmaccsu"]:
+                suffix = ".vv"
+                operands = f"v{fields['vd']}, v{fields['vs1']}, v{fields['vs2']}"
             elif mnemonic in ["vmandn", "vmand", "vmor", "vmxor", "vmorn", "vmnand", "vmnor", "vmxnor"]:
                 suffix = ".mm"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
             elif mnemonic.startswith("vred") or mnemonic.startswith("vwred"):
                 suffix = ".vs"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
+            elif mnemonic.startswith("vw") and mnemonic.endswith(".w"):
+                mnemonic = mnemonic[:-2]
+                suffix = ".wv"
+                operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
             else:
                 suffix = ".vv"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
         else: 
-            if mnemonic.startswith("vw") and mnemonic.endswith(".w"):
+            if mnemonic in ["vmacc", "vnmsac", "vmadd", "vnmsub", "vwmaccu", "vwmacc", "vwmaccsu", "vwmaccus"]:
+                suffix = ".vx"
+                operands = f"v{fields['vd']}, x{fields['rs1']}, v{fields['vs2']}"
+            elif mnemonic.startswith("vw") and mnemonic.endswith(".w"):
                 mnemonic = mnemonic[:-2]
                 suffix = ".wx"
                 operands = f"v{fields['vd']}, v{fields['vs2']}, x{fields['rs1']}"
