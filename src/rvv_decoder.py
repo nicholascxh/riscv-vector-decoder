@@ -149,6 +149,9 @@ class RVVDecoder:
             0b101111: "vnclip",
             # Multiply
             0b100111: "vsmul",
+            # Reduction
+            0b110000: "vwredsumu",
+            0b110001: "vwredsum"
         }
 
         # === OPM Instructions (Mask/Multiply) ===
@@ -639,13 +642,21 @@ class RVVDecoder:
             return None
             
         if funct3 == self.OPIVV:
-            suffix = ".vv"
+            if mnemonic.startswith("vred") or mnemonic.startswith("vwred"):
+                suffix = ".vs"
+            elif mnemonic.startswith("vnclip"):
+                suffix = ".wv"
+            else: suffix = ".vv"
             operands = f"v{fields['vd']}, v{fields['vs2']}, v{fields['vs1']}"
         elif funct3 == self.OPIVX:
-            suffix = ".vx"  
+            if mnemonic.startswith("vnclip"):
+                suffix = ".wx"
+            else: suffix = ".vx"  
             operands = f"v{fields['vd']}, v{fields['vs2']}, x{fields['rs1']}"
-        else:  
-            suffix = ".vi"
+        elif funct3 == self.OPIVI:
+            if mnemonic.startswith("vnclip"):
+                suffix = ".wi"
+            else: suffix = ".vi"
             imm = fields['imm']
             if imm & 0x10:  
                 imm = imm - 0x20
