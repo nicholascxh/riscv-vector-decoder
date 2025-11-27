@@ -286,8 +286,8 @@ class RVVDecoder:
         # Special operation mappings
         self.vwxunary0_map = {
             0b00000: "vmv.x.s",
-            0b10000: "vcpop", 
-            0b10001: "vfirst"
+            0b10000: "vcpop.m", 
+            0b10001: "vfirst.m"
         }
         
         self.vrxunary0_map = {
@@ -346,11 +346,11 @@ class RVVDecoder:
         }
         
         self.vmunary0_map = {
-            0b00001: "vmsbf",
-            0b00010: "vmsof", 
-            0b00011: "vmsif",
-            0b10000: "viota",
-            0b10001: "vid"
+            0b00001: "vmsbf.m",
+            0b00010: "vmsof.m", 
+            0b00011: "vmsif.m",
+            0b10000: "viota.m",
+            0b10001: "vid.v"
         }
 
     def extract_fields(self, instruction):
@@ -596,9 +596,8 @@ class RVVDecoder:
         if funct3 == self.OPMVV:
             if fields['rs1'] in self.vmunary0_map:
                 mnemonic = self.vmunary0_map[fields['rs1']]
-                suffix = ".m" if fields['rs1'] in [0b00001, 0b00010, 0b00011, 0b10000] else ".v"
                 vs2 = f", v{fields['vs2']}" if fields['rs1'] not in [0b10001] else ""
-                return f"{mnemonic}{suffix} v{fields['vd']}{vs2}{vm_str}"
+                return f"{mnemonic} v{fields['vd']}{vs2}{vm_str}"
         return None
 
     def _decode_vmv_nr_r(self, fields):
