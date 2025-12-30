@@ -651,6 +651,8 @@ class RVVDecoder:
             return None
             
         if funct3 == self.OPIVV:
+            if mnemonic.startswith("vslideup"):
+                mnemonic = "vrgatherei16"
             if mnemonic.startswith("vred") or mnemonic.startswith("vwred"):
                 suffix = ".vs"
             elif mnemonic.startswith("vnclip"):
